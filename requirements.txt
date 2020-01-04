@@ -1,0 +1,17 @@
+beautifulsoup4==4.8.2
+certifi==2019.11.28
+chardet==3.0.4
+fire==0.2.1
+future==0.18.2
+gkeepapi==0.11.9
+googletrans==2.4.0
+gpsoauth==0.4.1
+idna==2.8
+lxml==4.4.2
+pycryptodomex==3.9.4
+requests==2.22.0
+six==1.13.0
+soupsieve==1.9.5
+tabulate==0.8.6
+termcolor==1.1.0
+urllib3==1.25.7

@@ -35,7 +35,11 @@ def main(tr=None, lucky=None, avoid_list=None, info=None, list_file=None):
             selected_items[product] = all_items_info
             print(f'Already saved product: {all_items_info}')
         else:
-            selected_ids, save_selection = get_selected_id(all_items_info)
+            if lucky:
+                selected_ids = [0]
+                save_selection = False
+            else:
+                selected_ids, save_selection = get_selected_id(all_items_info)
             if selected_ids[0] == -1:
                 link = get_product(product, tr, only_link=True)
                 print(f'Find all {product} here: ')

@@ -18,7 +18,16 @@ Run with
 ```
 python3 kosik.py 
 ```
-and add the corresponding flags if needed.
+and add the corresponding flags if needed. 
+
+For example to read from a raw txt file:
+```
+python3 kosik.py --list_file list_file.txt
+```
+Or to translate into czech:
+```
+python3 kosik.py --tr 1
+```
 
 If you want to access Google Keep, you need to have a note called `Shopping list` and add a pickle tuple with your credentials:
 

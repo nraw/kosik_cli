@@ -4,10 +4,12 @@ import os
 import json
 import pickle
 import requests
+import os
 from bs4 import BeautifulSoup
 from functools import lru_cache
 from googletrans import Translator
 from tabulate import tabulate
+from dotenv import load_dotenv
 
 
 def main(tr=None, lucky=None, avoid_list=None, info=None, list_file=None):
@@ -36,26 +38,17 @@ def main(tr=None, lucky=None, avoid_list=None, info=None, list_file=None):
             print(f'Already saved product: {all_items_info}')
         else:
             if lucky:
-                selected_ids = [0]
+                selected_ids = ['0']
                 save_selection = False
             else:
                 selected_ids, save_selection = get_selected_id(all_items_info)
-            if selected_ids[0] == -1:
-                link = get_product(product, tr, only_link=True)
-                print(f'Find all {product} here: ')
-                print(link)
-                not_obvious_items[product] = link
-                if save_selection:
-                    new_save_items[product] = selected_ids
-            else:
-                selected_items[product] = []
-                for selected_id in selected_ids:
-                    selected_item = all_items_info[selected_id]
-                    print(f'Selected {selected_item[1]}')
-                    selected_items[product] += [selected_item[2]]
-                selected_items[product] = '\n'.join(selected_items[product])
-                if save_selection:
-                    new_save_items[product] = selected_items[product]
+            selected_item, not_obvious_item, new_save_item = handle_selected_ids(product, selected_ids, save_selection, all_items_info, tr)
+            if selected_item:
+                selected_items[product] = selected_item
+            if not_obvious_item:
+                not_obvious_items[product] = not_obvious_item
+            if new_save_item:
+                new_save_items[product] = new_save_item
     json.dump(selected_items, open('selected_items.json', 'w'))
     if not_obvious_items:
         print('++++++++++++++++++++++')
@@ -63,11 +56,42 @@ def main(tr=None, lucky=None, avoid_list=None, info=None, list_file=None):
         print(tabulate(not_obvious_items.items()))
     if selected_items:
         print('++++++++++++++++++++++')
-        print('Go go go shopping:')
+        print('Shopping list:')
         print(tabulate(selected_items.items()))
     if new_save_items:
         update_saved_items(new_save_items)
         print(new_save_items)
+    to_cart = input('Add items to cart (Y/n):')
+    if to_cart.lower() != 'n':
+        put_selected_items_in_shopping_cart()
+
+
+def handle_selected_ids(product, selected_ids, save_selection, all_items_info, tr):
+    new_save_item = None
+    if selected_ids[0] == '-1':
+        selected_item = None
+        link = get_product(product, tr, only_link=True)
+        print(f'Find all {product} here: ')
+        print(link)
+        not_obvious_item = link
+        if save_selection:
+            new_save_item = selected_ids
+    else:
+        not_obvious_item = None
+        selected_item_list = []
+        for selected_id in selected_ids:
+            if ':' in selected_id:
+                selected_id, quantity = (int(num) for num in selected_id.split(':'))
+            else:
+                selected_id = int(selected_id)
+                quantity = 1
+            selected_item_info = all_items_info[selected_id]
+            print(f'Selected {selected_item_info[1]}')
+            selected_item_list += [selected_item_info[4]]
+        selected_item = '\n'.join(selected_item_list)
+        if save_selection:
+            new_save_item = selected_item
+    return selected_item, not_obvious_item, new_save_item
 
 
 def get_shopping_list(list_file=None):
@@ -84,9 +108,11 @@ def get_shopping_list(list_file=None):
             shopping_list_raw = f.readlines()
         shopping_list = [product.strip() for product in shopping_list_raw]
     else:
+        load_dotenv()
+        if 'GOOGLE_USER' not in os.environ or 'GOOGLE_PASS' not in os.environ:
+            raise Exception("GOOGLE_USER or GOOGLE_PASS not environment variables. Add them to `.env` file or your system envs.")
         keep = gkeepapi.Keep()
-        auth = pickle.load(open('credentials', 'rb'))  # assumes there is a pickle file 'credentials' that is a tuple with google username and pass
-        keep.login(auth[0], auth[1])
+        keep.login(os.environ['GOOGLE_USER'], os.environ['GOOGLE_PASS'])
         shopping_list_objects = list(keep.find('Shopping'))[0].unchecked
         shopping_list = [product.text for product in shopping_list_objects]
     return shopping_list
@@ -112,7 +138,15 @@ def get_product(product, tr=None, lucky=None, avoid_list=None, info=None, only_l
     else:
         all_items_names = [texto.text.strip() for texto in all_items]
         all_items_links = [texto.parent.get('href') for texto in all_items]
-        all_items_info = list(zip(range(len(all_items_names)), all_items_names, all_items_links))
+        all_items_prices = [item.parent.parent.find('span', {'class': 'price__actual-price'}).get('content') for item in all_items]
+        all_items_id = [texto.parent.parent.parent.get('data-product-id') for texto in all_items]
+        all_items_info = list(zip(
+            range(len(all_items_names)), 
+            all_items_names, 
+            all_items_prices, 
+            all_items_links, 
+            all_items_id
+        ))
     return all_items_info
 
 
@@ -134,15 +168,20 @@ def get_all_items(product):
 
 def load_saved_items(saved_file='saved_items.json'):
     if not saved_file in os.listdir():
-        json.dump({}, open(saved_file, 'w'))
-    saved_items = json.load(open(saved_file, 'r'))
+        with open(saved_file, 'w') as f:
+            saved_items = {}
+            json.dump(saved_items, f)
+    else:
+        with open(saved_file, 'r') as f:
+            saved_items = json.load(f)
     return saved_items
 
 
 def update_saved_items(new_save_items, saved_file='saved_items.json'):
     saved_items = load_saved_items(saved_file)
     saved_items.update(new_save_items)
-    json.dump(saved_items, open(saved_file, 'w'))
+    with open(saved_file, 'w') as f:
+        json.dump(saved_items, f)
 
 
 def get_selected_id(all_items_info):
@@ -151,9 +190,39 @@ def get_selected_id(all_items_info):
     if not selected_ids:
         selected_ids = '-1'
     save_selection = 's' in selected_ids  # Save item with s
-    selected_ids = [int(s_id.replace('s', ''))
+    selected_ids = [s_id.replace('s', '')
                     for s_id in selected_ids.split(',')]
     return selected_ids, save_selection
+
+
+def put_selected_items_in_shopping_cart(selected_file = 'selected_items.json'):
+    selected_items = json.load(open(selected_file, 'r'))
+    payload, headers = get_payload_and_headers()
+    session = requests.Session()
+    session.post('https://www.kosik.cz/', data=payload, headers=headers)
+    for item, item_ids in selected_items.items():
+        for item_id in item_ids.split('\n'):
+            payload2 = dict(productId=item_id, quantity='1')  # TODO: quantity
+            rh = session.post('https://www.kosik.cz/kosik/set-to-cart', data=payload2, headers=headers)
+            if rh.ok:
+                print(f'Added {item} to cart ({item_id})')
+            else:
+                print(f'Problem with {item} ({item_id})')
+
+
+def get_payload_and_headers():
+    load_dotenv()
+    if 'KOSIK_USER' not in os.environ or 'KOSIK_PASS' not in os.environ:
+        raise Exception("KOSIK_USER or KOSIK_PASS not environment variables. Add them to `.env` file or your system envs.")
+    payload = {
+        'username': os.environ['KOSIK_USER'],
+        'password': os.environ['KOSIK_PASS'],
+        'projectDomainId': '6',
+        'do': 'signInForm-submit',
+        'send': 'Přihlásit se'
+        }
+    headers = {'User-Agent': 'Mozilla/5.0'}
+    return payload, headers
 
 
 if __name__ == '__main__':

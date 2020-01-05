@@ -29,11 +29,18 @@ Or to translate into czech:
 python3 kosik.py --tr 1
 ```
 
-If you want to access Google Keep, you need to have a note called `Shopping list` and add a pickle tuple with your credentials:
+If you want to access Google Keep you need to have a checklist called `Shopping list` and add your creds to your environment variables or to the `.env` file
 
+.env
 ```
-import pickle
-pickle.dump((USERNAME, PASSWORD), open('credentials', 'wb'))
+GOOGLE_USER=YourGmail
+GOOGLE_PASS=YourGmailPassword
+```
+similarly, if you want to be able to add items directly to your cart on kosik.cz, you must add
+.env
+```
+KOSIK_USER=YourEmail
+KOSIK_PASS=YourKosikPassword
 ```
 
 ## Why?
